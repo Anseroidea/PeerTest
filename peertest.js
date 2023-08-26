@@ -1,40 +1,42 @@
-var peer = new Peer();
-const params = new URLSearchParams(window.location.search)
-const q = params.get("host")
-var isHost = null
-var conn = null
-if (q == null) {
-    isHost = true
-} else {
-    conn = peer.connect(q);
-    conn.send("hi")
-    console.log(q)
-    console.log(conn)
-    isHost = false
-}
-peer.on('open', function(id) {
-	console.log('My peer ID is: ' + id);
-}); 
+
 
 document.addEventListener("DOMContentLoaded", () => {
+    var peer = new Peer({debug:3});
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get("host")
+    var isHost = null
+    var conn = null
     peer.on('open', function(id) {
         console.log('My peer ID is: ' + id);
+        if (q == null) {
+            peer.on('connection', function(conn) { 
+                alert("someone joined!")
+                conn.on('data', function(data) {
+                    console.log('Received', data);
+                    document.getElementById("messageText").textContent = data
+                });
+                document.getElementById("button").onclick = () => {
+                    conn.send(document.getElementById("messageToSend").value)
+                }            
+            });
+        } else {
+            conn = peer.connect(q);
+            conn.on('open', function() {
+                console.log("hi")
+                conn.send('hi')
+            })
+            conn.on('data', function(data) {
+                console.log('Received', data);
+                document.getElementById("messageText").textContent = data
+            });
+            document.getElementById("button").onclick = () => {
+                conn.send(document.getElementById("messageToSend").value)
+            }
+        
+        }
+    }); 
 
-    peer.on('connection', function(c) { 
-        conn = c
-        console.log(conn)
-        conn.on('data', function(data) {
-            console.log('Received', data);
-            document.getElementById("messageText").textContent = data
-        });
-        alert("someone joined!")
-    });
     
-    document.getElementById("button").onclick = () => {
-        console.log(conn)
-        conn.send(document.getElementById("messageToSend").textContent)
-    }
 
-    });
     
 })
