@@ -1,4 +1,4 @@
-import { broadcast } from '/networking.js'
+import { broadcast } from 'networking.js'
 
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("button").onclick = () => {
