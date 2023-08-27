@@ -1,71 +1,87 @@
 import { addMessage } from "./log.js";
 import { updateUserPanel } from "./ui.js";
 
-var connections = new Map()
-var users = []
-export var peer = new Peer({debug:3});
-const params = new URLSearchParams(window.location.search)
-const q = params.get("host")
-var isHost = null
-var conn = null
-peer.on('open', function(id) {
-    users.push(id)
-    console.log('My peer ID is: ' + id);
-    if (q == null) {
-        peer.on('connection', onUserJoin);
-        isHost = true
-        updateUserPanel(users, id)
-    } else {
-        conn = peer.connect(q);
-        conn.on('open', function() {
+let connections = new Map()
+export let users = new Map()
+let isHost = null
+let conn = null
+export let peer = null
 
-        })
-        conn.on('data', function(data) {
-            console.log('Received', data);
-            console.log("hi")
-            if (data.type == "message")
-            addMessage(data.source, data.value)
-            else if (data.type == "userData") {
-                users = data.value
-                updateUserPanel(users, peer.id)
-            }
-                
-        });
-        isHost = false
-    
-    }
-});
-var onUserJoin = (c) => { // runs only for host
+export function initUser(name) {
+    peer = new Peer({debug:3});
+    let params = new URLSearchParams(window.location.search)
+    let q = params.get("host")
+    peer.on('open', function(id) {
+        users.set(id, new User(id, name))
+        console.log('My peer ID is: ' + id);
+        if (q == null) {
+            peer.on('connection', onUserJoin);
+            isHost = true
+            updateUserPanel(users, id)
+        } else {
+            conn = peer.connect(q);
+            conn.on('open', function() {
+                conn.send({
+                    source: id,
+                    type: "userInit",
+                    value: users.get(id)
+                })
+            })
+            conn.on('data', function(data) {
+                console.log('Received', data);
+                console.log("hi")
+                if (data.type == "message")
+                addMessage(users.get(data.source).name, data.value)
+                else if (data.type == "userData") {
+                    JSON.parse(data.value).forEach(u => users.set(u[0], u[1]))
+                    console.log(users)
+                    updateUserPanel(users, peer.id)
+                }
+                    
+            });
+            isHost = false
+        }
+    });
+}
+
+let onUserJoin = (c) => { // runs only for host
     conn = c
     alert("someone joined!")
-    users.push(c.peer) // add new user
-    updateUserPanel(users, peer.id) // update userspanel
-    connections.set(c.peer, c) // add the new connection
-    c.on('open', () => { // init everyone including the new player
-        connections.forEach((v) => 
-            v.send({
-                source: peer.id,
-                type: "userData",
-                value: users
-            })
-        )
+    
+    c.on('open', () => { 
+        setTimeout(() => { // wait and see if they tell us info about themselves
+            if (users.get(c.peer) == undefined) { // we didn't get a response
+                c.close()
+            } // we good
+        }, 1000)
     })
     c.on('data', function(data) {
         console.log('Received', data);
         if (data.type == "message") {
-            addMessage(data.source, data.value)
+            addMessage(users.get(data.source).name, data.value)
             propagate(data)
+        } else if (data.type == "userInit") { // we got the handshake
+            users.set(c.peer, new User(data.value.id, data.value.name)) // add new user
+            updateUserPanel(users, peer.id) // update userspanel
+            connections.set(c.peer, c) // add the new connection
+            console.log(users)
+            connections.forEach((v) =>  // init everyone including the new player
+                v.send({
+                    source: peer.id,
+                    type: "userData",
+                    value: JSON.stringify([...users])
+                })
+            )
         }
     }); 
     c.on('close', function() {
-        users.splice(users.indexOf(c.peer), 1)
-        console.log(users)
+        users.delete(c.peer)
         connections.delete(c.peer)
         updateUserPanel(users, peer.id)
         propagate({
             source: peer.id,
             type: "userData",
-            value: users
+            value: JSON.stringify([...users])
         })
     });
 }
@@ -94,4 +110,13 @@ export let broadcast = (message) => {
     }
     propagate(data)
     
+}
+
+class User {
+
+    constructor(id, name) {
+        this.id = id
+        this.name = name
+    }
+
 }
