@@ -1,14 +1,20 @@
+import { addMessage } from "./log.js";
+import { updateUserPanel } from "./ui.js";
+
 var connections = new Map()
-var peer = new Peer({debug:3});
+var users = []
+export var peer = new Peer({debug:3});
 const params = new URLSearchParams(window.location.search)
 const q = params.get("host")
 var isHost = null
 var conn = null
 peer.on('open', function(id) {
+    users.push(id)
     console.log('My peer ID is: ' + id);
     if (q == null) {
         peer.on('connection', onUserJoin);
         isHost = true
+        updateUserPanel(users, id)
     } else {
         conn = peer.connect(q);
         conn.on('open', function() {
@@ -18,7 +24,12 @@ peer.on('open', function(id) {
             console.log('Received', data);
             console.log("hi")
             if (data.type == "message")
-                document.getElementById("messageText").textContent = data.value
+            addMessage(data.source, data.value)
+            else if (data.type == "userData") {
+                users = data.value
+                updateUserPanel(users, peer.id)
+            }
+                
         });
         isHost = false
     
@@ -27,17 +38,22 @@ peer.on('open', function(id) {
 var onUserJoin = (c) => { // runs only for host
     conn = c
     alert("someone joined!")
-    connections.set(conn.peer, conn)
-    conn.on('open', () => { // init the new player
-        conn.send({
-            type: "data",
-            users: null
-        })
+    users.push(c.peer) // add new user
+    updateUserPanel(users, peer.id) // update userspanel
+    connections.set(conn.peer, conn) // add the new connection
+    conn.on('open', () => { // init everyone including the new player
+        connections.forEach((v) => 
+            v.send({
+                source: peer.id,
+                type: "userData",
+                value: users
+            })
+        )
     })
     conn.on('data', function(data) {
         console.log('Received', data);
         if (data.type == "message") {
-            document.getElementById("messageText").textContent = data.value
+            addMessage(data.source, data.value)
             propagate(data)
         }
     }); 
