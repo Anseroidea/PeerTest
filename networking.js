@@ -40,8 +40,8 @@ var onUserJoin = (c) => { // runs only for host
     alert("someone joined!")
     users.push(c.peer) // add new user
     updateUserPanel(users, peer.id) // update userspanel
-    connections.set(conn.peer, conn) // add the new connection
-    conn.on('open', () => { // init everyone including the new player
+    connections.set(c.peer, c) // add the new connection
+    c.on('open', () => { // init everyone including the new player
         connections.forEach((v) => 
             v.send({
                 source: peer.id,
@@ -50,13 +50,24 @@ var onUserJoin = (c) => { // runs only for host
             })
         )
     })
-    conn.on('data', function(data) {
+    c.on('data', function(data) {
         console.log('Received', data);
         if (data.type == "message") {
             addMessage(data.source, data.value)
             propagate(data)
         }
     }); 
+    c.on('close', function() {
+        users.splice(users.indexOf(c.peer), 1)
+        console.log(users)
+        connections.delete(c.peer)
+        updateUserPanel(users, peer.id)
+        propagate({
+            source: peer.id,
+            type: "userData",
+            value: users
+        })
+    });
 }
 
 
