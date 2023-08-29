@@ -23,11 +23,13 @@
                     </div>
                 </div>
                 <div style = "display: flex; width: min(80%, 400px); align-items: center; flex-direction: row;">
-                    <input name = "peer" id = "messageToSend" style = "width: 70%">
-                    <button id = "button" style = "width: 30%; min-width: 50px">Send</button>
+                    <input name = "peer" id = "messageToSend" style = "width: 100%">
                 </div>          
             </div>
-            <div style = "width: 50%">
+            <div style = "width: 50%; padding: 1%;">
+                <button id="copyLinkButton">
+                    Copy link
+                </button>
             </div>
             <div style = "background-color: red; width: 25%">
     
@@ -39,10 +41,10 @@
         <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-            <h5 class="modal-title" id="nameModalLabel">Modal title</h5>
+            <h5 class="modal-title" id="nameModalLabel">Welcome!</h5>
             </div>
             <div class="modal-body">
-                <label for="nameInput" class="col-form-label">Enter a name!</label>
+                <label for="nameInput" class="col-form-label">Enter your username!</label>
                 <input type="text" class="form-control" id="nameInput">
             </div>
             <div class="modal-footer" style = "justify-content: space-between; flex-direction: row-reverse;">
@@ -53,4 +55,13 @@
         </div>
     </div>
         
+    <!-- Toast -->
+    <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
+        <div id="copiedToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="2000">
+          <div class="toast-body">
+            Copied link!
+          </div>
+        </div>
+      </div>
+
 </body>

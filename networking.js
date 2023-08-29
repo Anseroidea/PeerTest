@@ -33,6 +33,7 @@ export function initUser(name) {
                 if (data.type == "message")
                 addMessage(users.get(data.source).name, data.value)
                 else if (data.type == "userData") {
+                    users.clear()
                     JSON.parse(data.value).forEach(u => users.set(u[0], u[1]))
                     console.log(users)
                     updateUserPanel(users, peer.id)
@@ -64,7 +65,6 @@ let onUserJoin = (c) => { // runs only for host
             users.set(c.peer, new User(data.value.id, data.value.name)) // add new user
             updateUserPanel(users, peer.id) // update userspanel
             connections.set(c.peer, c) // add the new connection
-            console.log(users)
             connections.forEach((v) =>  // init everyone including the new player
                 v.send({
                     source: peer.id,

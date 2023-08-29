@@ -3,7 +3,10 @@ import { broadcast, initUser, users, peer } from './networking.js'
 
 document.addEventListener("DOMContentLoaded", () => {
     // init send message
-    document.getElementById("button").onclick = () => {
+    document.getElementById("messageToSend").addEventListener("keyup", (event) => {
+        if (event.code !== "Enter") {
+            return;
+        }
         let messageText = document.getElementById("messageToSend").value
         document.getElementById("messageToSend").value = ""
         if (messageText.trim().length == 0) {
@@ -11,10 +14,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         addMessage(users.get(peer.id).name, messageText)
         broadcast(messageText)
-    }
+    })
 
-    // init name submission button
+    // init name submission button and enter key
     document.getElementById("nameJoinButton").onclick = submitName
+    document.getElementById("nameInput").addEventListener("keyup", (event) => {
+        if (event.code !== "Enter") {
+            return;
+        }
+        submitName()
+    })
+
+    // init copy link
+    document.getElementById("copyLinkButton").onclick = function () {
+        navigator.clipboard.writeText("https://ansere.github.io/PeerTest?host=" + peer.id)
+        bootstrap.Toast.getOrCreateInstance(document.getElementById("copiedToast")).show()
+    }
 
     // ask for name
     bootstrap.Modal.getOrCreateInstance("#nameModal").show()
