@@ -26,13 +26,19 @@ document.addEventListener("DOMContentLoaded", () => {
     })
 
     // init copy link
-    document.getElementById("copyLinkButton").onclick = function () {
+    document.getElementById("copyLinkButton").onclick = () => {
         navigator.clipboard.writeText("https://ansere.github.io/PeerTest?host=" + peer.id)
         bootstrap.Toast.getOrCreateInstance(document.getElementById("copiedToast")).show()
     }
 
     // ask for name
     bootstrap.Modal.getOrCreateInstance("#nameModal").show()
+
+    // init start game
+
+    document.getElementById("startGameButton").onclick = () => {
+        document.getElementById("lobbyPanel").hidden = true
+    }
 
 
 })
