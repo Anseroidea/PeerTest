@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ask for name
     b.Modal.getOrCreateInstance("#nameModal").show();
     // init start game
-    document.getElementById("startGameButton").disabled = !isHost;
+    document.getElementById("startGameButton").disabled = true;
     document.getElementById("startGameButton").onclick = startGame;
     // game panel time
     // card submit init
@@ -118,4 +118,9 @@ export function startGame() {
         broadcast(data);
     }
     initGame();
+}
+export function updateLobbyPanel() {
+    if (isHost && users.size > 1) {
+        document.getElementById("startGameButton").disabled = false;
+    }
 }

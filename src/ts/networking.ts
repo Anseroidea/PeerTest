@@ -1,6 +1,6 @@
 import { initGame, nextTurn, readGameUpdate, runAction, sendGameUpdate } from "./game.js";
 import { addMessage } from "./log.js";
-import { startGame, updatePlayPanel, updateUserPanel } from "./ui.js";
+import { startGame, updateLobbyPanel, updatePlayPanel, updateUserPanel } from "./ui.js";
 
 const dataTypes = ["message", "userInit", "userData", "discard", "play", "draw", "gameUpdate", "startGame"] as const
 
@@ -21,6 +21,7 @@ export function initUser(name: string) {
         if (q == null) {
             peer.on('connection', onUserJoin);
             isHost = true
+            updateLobbyPanel()
             updateUserPanel(users, id)
         } else {
             conn = peer.connect(q);
@@ -40,6 +41,7 @@ export function initUser(name: string) {
                     users.clear()
                     JSON.parse(data.value).forEach(u => users.set(u[0], u[1]))
                     console.log(users)
+                    updateLobbyPanel()
                     updateUserPanel(users, peer.id)
                 } else if (data.type == "gameUpdate") { 
                     readGameUpdate(JSON.parse(data.value))
@@ -71,6 +73,7 @@ let onUserJoin = (c) => { // runs only for host
             propagate(data)
         } else if (data.type == "userInit") { // we got the handshake
             users.set(c.peer, new User(data.value.id, data.value.name)) // add new user
+            updateLobbyPanel()
             updateUserPanel(users, peer.id) // update userspanel
             connections.set(c.peer, c) // add the new connection
             connections.forEach((v) =>  // init everyone including the new player

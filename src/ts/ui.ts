@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
     b.Modal.getOrCreateInstance("#nameModal").show();
 
     // init start game
-    (document.getElementById("startGameButton") as HTMLInputElement).disabled = !isHost
+    (document.getElementById("startGameButton") as HTMLInputElement).disabled = true
     document.getElementById("startGameButton").onclick = startGame
 
     // game panel time
@@ -129,4 +129,10 @@ export function startGame() {
         broadcast(data)
     }
     initGame()
+}
+
+export function updateLobbyPanel(){ 
+    if (isHost && users.size > 1) {
+        (document.getElementById("startGameButton") as HTMLInputElement).disabled = false
+    }
 }
