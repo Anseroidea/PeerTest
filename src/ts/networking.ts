@@ -1,13 +1,17 @@
+import { initGame, nextTurn, readGameUpdate, runAction, sendGameUpdate } from "./game.js";
 import { addMessage } from "./log.js";
-import { updateUserPanel } from "./ui.js";
+import { startGame, updatePlayPanel, updateUserPanel } from "./ui.js";
 
-let connections = new Map()
-export let users = new Map()
-let isHost = null
+const dataTypes = ["message", "userInit", "userData", "discard", "play", "draw", "gameUpdate", "startGame"] as const
+
+let connections = new Map<string, any>()
+export let users = new Map<string, User>()
+export let isHost = null
 let conn = null
 export let peer = null
 
-export function initUser(name) {
+export function initUser(name: string) {
+    //@ts-ignore
     peer = new Peer({debug:3});
     let params = new URLSearchParams(window.location.search)
     let q = params.get("host")
@@ -31,12 +35,16 @@ export function initUser(name) {
                 console.log('Received', data);
                 console.log("hi")
                 if (data.type == "message")
-                addMessage(users.get(data.source).name, data.value)
+                    addMessage(users.get(data.source).name, data.value)
                 else if (data.type == "userData") {
                     users.clear()
                     JSON.parse(data.value).forEach(u => users.set(u[0], u[1]))
                     console.log(users)
                     updateUserPanel(users, peer.id)
+                } else if (data.type == "gameUpdate") { 
+                    readGameUpdate(JSON.parse(data.value))
+                } else if (data.type == "startGame") {
+                    startGame()
                 }
                     
             });
@@ -72,6 +80,11 @@ let onUserJoin = (c) => { // runs only for host
                     value: JSON.stringify([...users])
                 })
             )
+        } else if (data.type == "play") { // we get play info
+            runAction(JSON.parse(data.value), data.source)
+            nextTurn()
+            updatePlayPanel()
+            sendGameUpdate()
         }
     }); 
     c.on('close', function() {
@@ -95,26 +108,41 @@ let propagate = (data) => {  // only host runs
     })
 }
 
-export let broadcast = (message) => {
-    if (conn == null) {
-        return;
-    } 
-    let data = {
+export let broadcastMessage = (message: string) => {
+    broadcast({
         source: peer.id,
         type: "message",
         value: message
+    })
+}
+
+export let sendDAtaMessage = (id: string, data: DataMessage) => {
+    connections.get(id).send(data)
+}
+
+export let broadcast = (data: DataMessage) => {
+    if (conn == null) {
+        return;
     }
     if (!isHost) { // client
         conn.send(data)
         return
     }
-    propagate(data)
-    
+    propagate(data)   
 }
 
-class User {
+export type DataMessage = {
+    source: string, 
+    type: typeof dataTypes[number], 
+    value: string
+}
 
-    constructor(id, name) {
+export class User {
+
+    id: string
+    name: string
+
+    constructor(id: string, name: string) {
         this.id = id
         this.name = name
     }
