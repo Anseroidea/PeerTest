@@ -134,6 +134,14 @@ export let broadcast = (data: DataMessage) => {
     propagate(data)   
 }
 
+// host only
+export let message = (data: DataMessage, target: User) => {
+    if (!isHost) {
+        return
+    }
+    connections.get(target.id).send(data)
+}
+
 export type DataMessage = {
     source: string, 
     type: typeof dataTypes[number], 

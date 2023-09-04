@@ -126,6 +126,13 @@ export let broadcast = (data) => {
     }
     propagate(data);
 };
+// host only
+export let message = (data, target) => {
+    if (!isHost) {
+        return;
+    }
+    connections.get(target.id).send(data);
+};
 export class User {
     constructor(id, name) {
         this.id = id;

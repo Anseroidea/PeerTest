@@ -1,4 +1,4 @@
-import { DataMessage, User, broadcast, isHost, peer, users } from "./networking.js";
+import { DataMessage, User, broadcast, isHost, message, peer, users } from "./networking.js";
 import { updatePlayPanel } from "./ui.js";
 
 let GameSettings = {
@@ -51,8 +51,6 @@ const CONST_VERIFIERS = {
                 if (max < 0) {
                     max = action.cards.length
                 }
-                console.log(gameUser.hand)
-                console.log(action.cards)
                 return action.cards.length >= min && action.cards.length <= max && action.cards.every(c => c.valueAsNumber == action.cards[0].valueAsNumber)       
             }
         } as Verifier
@@ -192,13 +190,12 @@ class GameUser {
         return result
     }
 
-    playCards(...cards: Card[]) {
-        cards.forEach(c => {
-            let index = cards.indexOf(c);
-            if (index <= -1) {
-                throw Error("Illegal play of nonexistent card")
+    playCards(...cards: number[]) {
+        cards.reverse().forEach(c => {
+            if (c > this.hand.length) {
+                throw Error("Illegal play of card, index out of bounds")
             }
-            this.hand.splice(index, 1)
+            this.hand.splice(c, 1)
             this.peer.handSize -= 1
         })
     }
@@ -219,7 +216,6 @@ class GamePeer {
 
 
 export function initGame() {
-    console.log("what the fuck")
     // create deck
     if (isHost) {
         deck = Deck.createDeck
@@ -266,17 +262,19 @@ function distributeCards() {
 
 // run only by host
 export function runAction(cardIndices: number[], source: string) {
+    console.log(cardIndices)
     let user: GameUser;
     if (source == peer.id) {
         user = gameUser
     } else {
         user = otherGameUsers.get(source)
     }
-    let action: Action = new Action(cardIndices.map(c => gameUser.hand[c]), user)
+    let action: Action = new Action(cardIndices.map(c => user.hand[c]), user)
     if (turn != source || ![...GameSettings.verifiers.entries()].some(([v, _]) => v.check(action)))  {
         throw Error("Illegal play from " + users.get(source))
     }
-    user.playCards(...action.cards)
+    console.log(action.cards)
+    user.playCards(...cardIndices)
 }
 
 export function nextTurn() {
@@ -287,7 +285,6 @@ export function nextTurn() {
 // game networking
 
 export function sendPlay(cardIndices: number[]){ 
-    console.log(cardIndices)
     let action: Action = new Action(cardIndices.map(c => gameUser.hand[c]), gameUser)
     if (turn != peer.id || ![...GameSettings.verifiers.entries()].some(([v, _]) => v.check(action))) 
         return false
@@ -305,25 +302,24 @@ export function sendGameUpdate() {
     if (!isHost) {
         throw Error("Illegal client access to sendGameUpdate()")
     }
-    [...otherGameUsers.entries()].map(([k, v]) => v).forEach((u, i, others) => {
+    [...otherGameUsers.entries()].map(([_, v]) => v).forEach((u, i, others) => {
         let gameUpdate : GameUpdate = {
             user: u,
             peers: [...others].slice(i, i + 1).map(v => v.peer),
             turn: turn
         }
-        console.log(u.peer.handSize)
         let data: DataMessage = {
             source: peer.id,
             type: "gameUpdate",
             value: JSON.stringify(gameUpdate)
         }
-        broadcast(data)
+        message(data, u.user)
     }) 
 }
 
 export function readGameUpdate(data: GameUpdate) {
-    console.log(gameUser)
     gameUser.hand = data.user.hand.map(c => new Card(c.value, c.suit))
+    gameUser.peer.handSize = data.user.hand.length
     gamePeers = new Map(data.peers.map(p => [p.user.id, p]))
     turn = data.turn
     updatePlayPanel()
