@@ -2,7 +2,7 @@ import { initGame, nextTurn, readGameUpdate, runAction, sendGameUpdate } from ".
 import { addMessage } from "./log.js";
 import { startGame, updateLobbyPanel, updatePlayPanel, updateUserPanel } from "./ui.js";
 
-const dataTypes = ["message", "userInit", "userData", "discard", "play", "draw", "gameUpdate", "startGame"] as const
+const dataTypes = ["message", "userInit", "userData", "pileAdd", "play", "pileRemove", "gameUpdate", "startGame"] as const
 
 let connections = new Map<string, any>()
 export let users = new Map<string, User>()

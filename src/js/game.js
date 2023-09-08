@@ -1,16 +1,29 @@
-var _a;
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _Pile_remover, _a;
 import { broadcast, isHost, message, peer, users } from "./networking.js";
 import { updatePlayPanel } from "./ui.js";
 let GameSettings = {
     startingCards: 7,
     maxPlayers: -1,
-    verifiers: new Set()
+    verifiers: new Set(),
+    playToDiscard: true
 };
 export let deck;
 export let gameUser;
 export let otherGameUsers = new Map(); //only init if host
 export let gamePeers = new Map(); //only init if client
 export let turn;
+let piles = new Map();
 const CONST_VERIFIERS = {
     RANGE_RUN: (min, max) => {
         return {
@@ -80,8 +93,46 @@ class Card {
 }
 Card.suits = ["S", "C", "H", "D"];
 Card.values = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"];
-class Deck {
+class Pile {
+    constructor(name, settings) {
+        _Pile_remover.set(this, void 0);
+        this.name = name;
+        this.settings = settings;
+        if (settings.behavior == "QUEUE") {
+            __classPrivateFieldSet(this, _Pile_remover, () => {
+                return this.pile.shift();
+            }, "f");
+        }
+        else {
+            __classPrivateFieldSet(this, _Pile_remover, () => {
+                return this.pile.pop();
+            }, "f");
+        }
+    }
+    addCards(...cards) {
+        this.pile = this.pile.concat(cards);
+    }
+    removeCards(n) {
+        if (n > this.pile.length) {
+            throw Error("Illegal draw, pile " + this.name + " had " + this.pile.length + " cards but tried to draw " + n + " cards.");
+        }
+        return [...Array(n)].map(n => __classPrivateFieldGet(this, _Pile_remover, "f").call(this));
+    }
+    static get DEFAULT_DRAW() {
+        return {
+            topVisible: -1,
+            behavior: "QUEUE",
+            showFaces: false
+        };
+    }
+    get size() {
+        return this.pile.length;
+    }
+}
+_Pile_remover = new WeakMap();
+class Deck extends Pile {
     constructor() {
+        super("deck", Pile.DEFAULT_DRAW);
         this.cards = [];
     }
     set addCard(card) {
@@ -95,9 +146,6 @@ class Deck {
             });
         });
         return newDeck;
-    }
-    get size() {
-        return this.cards.length;
     }
     drawCard(n) {
         if (n > this.size) {
@@ -141,12 +189,12 @@ class GameUser {
         this.peer.handSize += cards.length;
     }
     playCards(...cards) {
-        cards.reverse().forEach(c => {
+        return cards.reverse().map(c => {
             if (c > this.hand.length) {
                 throw Error("Illegal play of card, index out of bounds");
             }
-            this.hand.splice(c, 1);
             this.peer.handSize -= 1;
+            return this.hand.splice(c, 1)[0];
         });
     }
 }
@@ -188,6 +236,88 @@ export function initGame() {
         updatePlayPanel();
         sendGameUpdate();
     }
+    let drawnCard = deck.drawCard(1)[0];
+    let discard = new Pile("discard", {
+        topVisible: 1,
+        behavior: "STACK",
+        showFaces: true
+    });
+    discard.addCards(drawnCard);
+    piles.set("draw", deck);
+    piles.set("discard", discard);
+    //DISCARD and DRAW are reserved pile names
+    //DISCARD refers to a pile of cards of which players can/need to add cards to
+    //DRAW refers to a pile of cards of which players can/need to remove cards from
+    //DRAw by default refers to the deck
+}
+// run only by host
+function playerDraw(source) {
+    if (!isHost) {
+        throw Error("Illegal client access to playerDraw()");
+    }
+    let user;
+    if (source == peer.id) {
+        user = gameUser;
+    }
+    else {
+        user = otherGameUsers.get(source);
+    }
+    if (deck.size == 0) {
+        return false;
+    }
+    else {
+        let card = deck.removeCards(1)[0];
+        user.addToHand(card);
+        return true;
+    }
+}
+// run only by host
+function runPlayerRemoveFromPile(source, pileStr, num) {
+    if (!isHost) {
+        throw Error("Illegal client access to runPlayerPileEdit()");
+    }
+    let pile = piles.get(pileStr);
+    if (piles.get(pileStr) == undefined) {
+        throw Error("Nonexistent pile " + pileStr + "requested");
+    }
+    let user;
+    if (source == peer.id) {
+        user = gameUser;
+    }
+    else {
+        user = otherGameUsers.get(source);
+    }
+    if (pile.size == 0) {
+        return false;
+    }
+    else {
+        let cards = deck.removeCards(num);
+        user.addToHand(...cards);
+        return true;
+    }
+}
+// run only by host
+function runPlayerAddToPile(source, pileStr, cardIndices) {
+    if (!isHost) {
+        throw Error("Illegal client access to runPlayerPileEdit()");
+    }
+    let pile = piles.get(pileStr);
+    if (piles.get(pileStr) == undefined) {
+        throw Error("Nonexistent pile " + pileStr + "requested");
+    }
+    let user;
+    if (source == peer.id) {
+        user = gameUser;
+    }
+    else {
+        user = otherGameUsers.get(source);
+    }
+    if (user.hand.length < cardIndices.length) {
+        return false;
+    }
+    let convertedCards = user.playCards(...cardIndices);
+    pile.addCards(...convertedCards);
+    return true;
 }
 // run only by host
 function distributeCards() {
@@ -212,8 +342,9 @@ export function runAction(cardIndices, source) {
     if (turn != source || ![...GameSettings.verifiers.entries()].some(([v, _]) => v.check(action))) {
         throw Error("Illegal play from " + users.get(source));
     }
-    console.log(action.cards);
-    user.playCards(...cardIndices);
+    let cards = user.playCards(...cardIndices);
+    if (GameSettings.playToDiscard)
+        piles.get("discard").addCards(...cards);
 }
 export function nextTurn() {
     let userArray = [...users.entries()].map(([k, _]) => k);
@@ -237,10 +368,30 @@ export function sendGameUpdate() {
     if (!isHost) {
         throw Error("Illegal client access to sendGameUpdate()");
     }
+    let pileData = [...piles.entries()].map(p => {
+        let pileSettings = p[1].settings;
+        let cards;
+        if (pileSettings.topVisible < 0) {
+            cards = p[1].pile;
+        }
+        else {
+            if (pileSettings.behavior == "QUEUE") {
+                cards = p[1].pile.slice(0, pileSettings.topVisible);
+            }
+            else {
+                cards = p[1].pile.slice(-pileSettings.topVisible);
+            }
+        }
+        if (!pileSettings.showFaces) {
+            cards = cards.map(c => undefined);
+        }
+        return [p[0], cards];
+    });
     [...otherGameUsers.entries()].map(([_, v]) => v).forEach((u, i, others) => {
         let gameUpdate = {
             user: u,
             peers: [...others].slice(i, i + 1).map(v => v.peer),
+            piles: pileData,
             turn: turn
         };
         let data = {
@@ -255,6 +406,24 @@ export function readGameUpdate(data) {
     gameUser.hand = data.user.hand.map(c => new Card(c.value, c.suit));
     gameUser.peer.handSize = data.user.hand.length;
     gamePeers = new Map(data.peers.map(p => [p.user.id, p]));
+    piles = new Map(data.piles.map(p => {
+        let pileSettings = {
+            topVisible: -1,
+            behavior: "QUEUE",
+            showFaces: p[1][0] === undefined
+        };
+        let pile = new Pile(p[0], pileSettings); // these are just display
+        pile.addCards(...p[1]);
+        return [p[0], pile];
+    }));
     turn = data.turn;
     updatePlayPanel();
+}
+export function requestAddToPile(pile, num) {
+    let data = {
+        source: peer.id,
+        type: ""
+    };
+}
+export function requestRemoveFromPile(pile, num) {
 }

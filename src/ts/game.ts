@@ -4,7 +4,8 @@ import { updatePlayPanel } from "./ui.js";
 let GameSettings = {
     startingCards: 7,
     maxPlayers: -1,
-    verifiers: new Set() as Set<Verifier>
+    verifiers: new Set() as Set<Verifier>,
+    playToDiscard: true
 }
 export let deck: Deck
 export let gameUser: GameUser;
@@ -404,8 +405,9 @@ export function runAction(cardIndices: number[], source: string) {
     if (turn != source || ![...GameSettings.verifiers.entries()].some(([v, _]) => v.check(action)))  {
         throw Error("Illegal play from " + users.get(source))
     }
-    console.log(action.cards)
-    user.playCards(...cardIndices)
+    let cards = user.playCards(...cardIndices)
+    if (GameSettings.playToDiscard)
+        piles.get("discard").addCards(...cards)
 }
 
 export function nextTurn() {
@@ -484,7 +486,14 @@ export function readGameUpdate(data: GameUpdate) {
     updatePlayPanel()
 }
 
-export function requestPileUpdate(pile: string, action: "I" | "O", num: number) {
-    
+export function requestAddToPile(pile: string, num: number) {
+    let data = {
+        source: peer.id,
+        type: ""
+    }
+}
+
+export function requestRemoveFromPile(pile: string, num: number) {
+
 }
 

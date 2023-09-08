@@ -1,7 +1,7 @@
 import { nextTurn, readGameUpdate, runAction, sendGameUpdate } from "./game.js";
 import { addMessage } from "./log.js";
 import { startGame, updateLobbyPanel, updatePlayPanel, updateUserPanel } from "./ui.js";
-const dataTypes = ["message", "userInit", "userData", "discard", "play", "draw", "gameUpdate", "startGame"];
+const dataTypes = ["message", "userInit", "userData", "pileAdd", "play", "pileRemove", "gameUpdate", "startGame"];
 let connections = new Map();
 export let users = new Map();
 export let isHost = null;
@@ -113,7 +113,7 @@ export let broadcastMessage = (message) => {
         value: message
     });
 };
-export let sendDAtaMessage = (id, data) => {
+export let sendDataMessage = (id, data) => {
     connections.get(id).send(data);
 };
 export let broadcast = (data) => {
