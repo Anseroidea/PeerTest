@@ -119,7 +119,7 @@ export let broadcastMessage = (message: string) => {
     })
 }
 
-export let sendDAtaMessage = (id: string, data: DataMessage) => {
+export let sendDataMessage = (id: string, data: DataMessage) => {
     connections.get(id).send(data)
 }
 
