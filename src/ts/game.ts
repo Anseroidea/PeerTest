@@ -14,8 +14,10 @@ export let turn: string;
 export type GameUpdate = {
     user: GameUser,
     peers: GamePeer[],
+    piles: [string, Card[]][]
     turn: string
 }
+let piles: Map<string, Pile> = new Map()
 
 const CONST_VERIFIERS = {
     RANGE_RUN: (min: number, max: number) => {
@@ -99,11 +101,64 @@ class Card {
 
 }
 
-class Deck {
+type PileSettings = {
+    topVisible: number
+    behavior: "QUEUE" | "STACK"
+    showFaces: boolean
+}
+
+class Pile {
+
+    name: string
+    pile: Card[]
+    settings: PileSettings 
+    #remover: () => Card;
+
+    constructor(name: string, settings: PileSettings) {
+        this.name = name
+        this.settings = settings
+        if (settings.behavior == "QUEUE") {
+            this.#remover = () => {
+                return this.pile.shift()
+            }
+        } else {
+            this.#remover = () => {
+                return this.pile.pop()
+            }
+        }
+    }
+
+    addCards(...cards: Card[]) {
+        this.pile = this.pile.concat(cards)
+    }
+
+    removeCards(n: number) {
+        if (n > this.pile.length) {
+            throw Error("Illegal draw, pile " + this.name + " had " + this.pile.length + " cards but tried to draw " + n + " cards.")
+        }
+        return [...Array(n)].map(n => this.#remover())
+    }
+
+    public static get DEFAULT_DRAW(): PileSettings {
+        return {
+            topVisible: -1,
+            behavior: "QUEUE",
+            showFaces: false
+        }   
+    }
+
+    get size(): number {
+        return this.pile.length
+    }
+
+}
+
+class Deck extends Pile{
 
     cards: Card[];
 
     constructor() {
+        super("deck", Pile.DEFAULT_DRAW)
         this.cards = []
     }
 
@@ -130,10 +185,6 @@ class Deck {
             })
         })
         return newDeck;
-    }
-
-    get size(): number {
-        return this.cards.length
     }
 
     drawCard(n: number): Card[] {
@@ -190,13 +241,13 @@ class GameUser {
         return result
     }
 
-    playCards(...cards: number[]) {
-        cards.reverse().forEach(c => {
+    playCards(...cards: number[]): Card[] {
+        return cards.reverse().map(c => {
             if (c > this.hand.length) {
                 throw Error("Illegal play of card, index out of bounds")
             }
-            this.hand.splice(c, 1)
             this.peer.handSize -= 1
+            return this.hand.splice(c, 1)[0]
         })
     }
 
@@ -213,7 +264,6 @@ class GamePeer {
     }
 
 }
-
 
 export function initGame() {
     // create deck
@@ -248,6 +298,87 @@ export function initGame() {
         updatePlayPanel()
         sendGameUpdate()
     }
+    let drawnCard: Card = deck.drawCard(1)[0]
+    let discard = new Pile("discard", {
+        topVisible: 1,
+        behavior: "STACK",
+        showFaces: true
+    })
+    discard.addCards(drawnCard)
+    piles.set("draw", deck)
+    piles.set("discard", discard)
+    //DISCARD and DRAW are reserved pile names
+    //DISCARD refers to a pile of cards of which players can/need to add cards to
+    //DRAW refers to a pile of cards of which players can/need to remove cards from
+    //DRAw by default refers to the deck
+
+}
+
+// run only by host
+function playerDraw(source: string) {
+    if (!isHost) {
+        throw Error("Illegal client access to playerDraw()")
+    }
+    let user: GameUser;
+    if (source == peer.id) {
+        user = gameUser
+    } else {
+        user = otherGameUsers.get(source)
+    }
+    if (deck.size == 0) {
+        return false
+    } else {
+        let card = deck.removeCards(1)[0]
+        user.addToHand(card)
+        return true
+    }
+}
+
+// run only by host
+function runPlayerRemoveFromPile(source, pileStr: string, num: number) {
+    if (!isHost) {
+        throw Error("Illegal client access to runPlayerPileEdit()")
+    }
+    let pile = piles.get(pileStr)
+    if (piles.get(pileStr) == undefined) {
+        throw Error("Nonexistent pile " + pileStr + "requested")
+    }
+    let user: GameUser;
+    if (source == peer.id) {
+        user = gameUser
+    } else {
+        user = otherGameUsers.get(source)
+    }
+    if (pile.size == 0) {
+        return false
+    } else {
+        let cards = deck.removeCards(num)
+        user.addToHand(...cards)
+        return true
+    }
+}
+
+// run only by host
+function runPlayerAddToPile(source, pileStr: string, cardIndices: number[]) {
+    if (!isHost) {
+        throw Error("Illegal client access to runPlayerPileEdit()")
+    }
+    let pile = piles.get(pileStr)
+    if (piles.get(pileStr) == undefined) {
+        throw Error("Nonexistent pile " + pileStr + "requested")
+    }
+    let user: GameUser;
+    if (source == peer.id) {
+        user = gameUser
+    } else {
+        user = otherGameUsers.get(source)
+    }
+    if (user.hand.length < cardIndices.length) {
+        return false
+    }
+    let convertedCards = user.playCards(...cardIndices)
+    pile.addCards(...convertedCards)
+    return true
 }
 
 // run only by host
@@ -302,10 +433,28 @@ export function sendGameUpdate() {
     if (!isHost) {
         throw Error("Illegal client access to sendGameUpdate()")
     }
+    let pileData: [string, Card[]][] = [...piles.entries()].map(p => {
+        let pileSettings = p[1].settings
+        let cards: Card[];
+        if (pileSettings.topVisible < 0) {
+            cards = p[1].pile
+        } else {
+            if (pileSettings.behavior == "QUEUE") {
+                cards = p[1].pile.slice(0, pileSettings.topVisible)
+            } else {
+                cards = p[1].pile.slice(-pileSettings.topVisible)
+            }
+        }
+        if (!pileSettings.showFaces) {
+            cards = cards.map(c => undefined)
+        }
+        return [p[0], cards]
+    });
     [...otherGameUsers.entries()].map(([_, v]) => v).forEach((u, i, others) => {
         let gameUpdate : GameUpdate = {
             user: u,
             peers: [...others].slice(i, i + 1).map(v => v.peer),
+            piles: pileData,
             turn: turn
         }
         let data: DataMessage = {
@@ -321,8 +470,21 @@ export function readGameUpdate(data: GameUpdate) {
     gameUser.hand = data.user.hand.map(c => new Card(c.value, c.suit))
     gameUser.peer.handSize = data.user.hand.length
     gamePeers = new Map(data.peers.map(p => [p.user.id, p]))
+    piles = new Map(data.piles.map(p => {
+        let pileSettings: PileSettings = {
+            topVisible: -1,
+            behavior: "QUEUE",
+            showFaces: p[1][0] === undefined
+        }
+        let pile: Pile = new Pile(p[0], pileSettings) // these are just display
+        pile.addCards(...p[1])
+        return [p[0], pile]
+    }))
     turn = data.turn
     updatePlayPanel()
 }
 
+export function requestPileUpdate(pile: string, action: "I" | "O", num: number) {
+    
+}
 
